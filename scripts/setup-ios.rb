@@ -22,7 +22,11 @@ IOS_DIR    = File.join(SDK_ROOT, "ios")                      # bridge + core liv
 CORE_DIR   = File.join(IOS_DIR, "core", "bitchat")          # vendored bitchat sources
 LOCAL_PKGS = File.join(IOS_DIR, "core", "localPackages")   # BitFoundation/BitLogger/Arti
 
-proj_path = ARGV[0] || File.join(SDK_ROOT, "example", "ios", "MeshChatExample.xcodeproj")
+# The example app is a sibling repo (../mesh-chat-example); pass the .xcodeproj
+# path explicitly (the example's `npm run setup-ios` does this). Fall back to the
+# sibling default.
+proj_path = ARGV[0] ||
+            File.join(SDK_ROOT, "..", "mesh-chat-example", "ios", "MeshChatExample.xcodeproj")
 target_name = ARGV[1] # nil -> first application target
 
 abort("Project not found: #{proj_path}") unless File.exist?(proj_path)
