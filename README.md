@@ -1,123 +1,79 @@
 # react-native-mesh-sdk
 
-Bluetooth-mesh messaging for React Native — chat over BLE with **no internet**,
-ported from the native [BitChat](https://github.com/permissionlesstech) cores
-for Android and iOS.
+Bluetooth‑mesh messaging for React Native — chat over BLE with **no internet**,
+ported from the native [BitChat](https://github.com/permissionlesstech) cores for
+Android and iOS.
 
-The library deliberately keeps a hard line between **our code** and **Core
-BitChat**: we never modify the upstream classes, we only wrap their *public*
-interfaces. Pulling a new BitChat release is a single `npm run sync-core`.
+- 📡 **Offline mesh** over Bluetooth LE (multi‑hop relay)
+- 🔒 **End‑to‑end encrypted** private messages (Noise protocol)
+- 📢 **Public broadcast** channel to all nearby peers
+- 👥 Live **peer list** with nicknames, RSSI and encryption state
+- ✅ Delivery / read receipts
+- 🧩 The full BitChat core is **vendored verbatim** — updating to a new BitChat
+  release is a single `npm run sync-core`, no forking of upstream classes.
 
-## Architecture
+> The library keeps a hard line between **our wrapper code** and **Core BitChat**:
+> we never edit the upstream classes, we only wrap their *public* interfaces
+> (`MeshService` on Android, `Transport` on iOS).
 
-```
-┌─────────────────────┐
-│  React Native App    │   example/ (chat UI like the native apps)
-└──────────┬──────────┘
-           │  import { MeshSdk } from 'react-native-mesh-sdk'
-┌──────────▼──────────┐
-│  NPM Module (TS)     │   src/  — typed facade + NativeEventEmitter
-└──────────┬──────────┘
-           │  NativeModules.MeshSdk  (bridge / TurboModule-ready)
-┌──────────▼──────────┐
-│  Native SDK          │   android/src + ios/MeshSdk.*  ← THE ONLY GLUE WE OWN
-│  (thin wrapper)      │
-└──────────┬──────────┘
-           │  public MeshService (Android) / Transport (iOS)
-┌──────────▼──────────┐
-│  Core BitChat        │   android/core + ios/core  ← VENDORED VERBATIM
-│  (unchanged)         │
-└─────────────────────┘
-```
+## Requirements
 
-**All of our changes live in the top wrapper layer.** As long as the public
-interface of Core BitChat
-([`MeshService`](android/core/com/bitchat/android/mesh/MeshService.kt) /
-[`Transport`](ios/core/bitchat/Services/Transport.swift)) doesn't change, an
-upstream update is a pure file copy.
+| | Minimum |
+|---|---|
+| React Native | 0.74 |
+| Android | `minSdk 26`, JDK 17, AGP 8.6 / Gradle 8.8, Kotlin 2.0.21 |
+| iOS | 16.0, Xcode 16+ |
 
-## Layout
+Bluetooth mesh needs **two physical devices** — simulators/emulators have no BLE radio.
 
-| Path | What it is | Who maintains it |
-|------|-----------|------------------|
-| `src/` | TS interface — `MeshSdk` facade, types, native spec | us |
-| `android/src/main/java/com/meshsdk/` | Android Native SDK wrapper (`MeshSdkModule` ⟶ `UnifiedMeshService`, implements `MeshDelegate`) | us |
-| `ios/MeshSdk.swift`, `ios/MeshSdk.m` | iOS Native SDK wrapper (wraps `BLEService`/`Transport`, implements `BitchatDelegate`) | us |
-| `android/core/` | `com.bitchat.android.*` copied as-is | **upstream — do not edit** |
-| `ios/core/` | BitChat services/protocols/models + `localPackages` copied as-is | **upstream — do not edit** |
-| `scripts/sync-core.sh` | Re-vendors both cores | us |
-| `example/` | Reference RN app with BitChat-like UX | us |
-
-## Keeping Core BitChat up to date
-
-```bash
-# repos are expected next to this package by default
-ANDROID_SRC=../bitchat-android IOS_SRC=../bitchat-ios npm run sync-core
-```
-
-This copies the entire `com.bitchat.android` tree into `android/core`, and the
-BitChat service/protocol/model layers + `localPackages` into `ios/core`. Then
-rebuild. If the wrapper fails to compile after a sync, the public
-`MeshService`/`Transport` surface changed — adjust **only** the wrapper.
-
-## Install (in a host app)
+## Install
 
 ```bash
 npm install react-native-mesh-sdk
-cd ios && pod install   # iOS
 ```
 
-Android & iOS autolinking register the module automatically (RN ≥ 0.60).
+### Android (autolinked)
 
-### Permissions
+Nothing to wire up — the module autolinks. The library ships the required
+Bluetooth/location permissions; request them at runtime (see the example's
+`useMesh.ts`). Core BitChat requires, on **all** API levels:
 
-**Android** (`AndroidManifest.xml` perms ship with the library; request at
-runtime — see `example/src/useMesh.ts`):
-`BLUETOOTH_SCAN`, `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT` (and
-`ACCESS_FINE_LOCATION` on API < 31).
+`BLUETOOTH_SCAN`, `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`,
+`ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`.
 
-**iOS** (`Info.plist`):
+### iOS (scripted — not a CocoaPods autolink)
+
+Because bitchat‑ios is a SwiftPM codebase whose Core symbols are `internal` and
+which depends on SwiftPM packages, the Core + the RN bridge must compile **into
+the app target** (Swift modules can't be merged the way Kotlin packages can). A
+script wires this into your Xcode project:
+
+```bash
+# from your app folder, with react-native-mesh-sdk installed
+ruby node_modules/react-native-mesh-sdk/scripts/setup-ios.rb ios/YourApp.xcodeproj
+cd ios && pod install
+```
+
+`setup-ios.rb` (uses the `xcodeproj` gem bundled with CocoaPods):
+- adds the vendored Core + the bridge (`MeshSdk.swift/.m`, `MeshSdkShims.swift`)
+  to the app target;
+- adds the SwiftPM packages — local `BitFoundation`, `BitLogger`, `Tor` (Arti,
+  incl. its prebuilt `arti.xcframework`) and remote `P256K` (`swift-secp256k1`);
+- sets deployment target 16.0 and `SWIFT_VERSION`.
+
+Add to `Info.plist`:
 
 ```xml
 <key>NSBluetoothAlwaysUsageDescription</key>
 <string>Used to form an offline Bluetooth mesh.</string>
 <key>NSBluetoothPeripheralUsageDescription</key>
 <string>Used to form an offline Bluetooth mesh.</string>
+<key>UIBackgroundModes</key>
+<array><string>bluetooth-central</string><string>bluetooth-peripheral</string></array>
 ```
 
-### iOS integration
-
-bitchat-ios is a SwiftPM codebase whose Core symbols are `internal` and which
-depends on SwiftPM packages. Swift modules can't be merged the way Kotlin
-packages can, so — unlike Android (a Gradle library) — the iOS Core + the RN
-bridge compile **into the app target** (one module), and the dependencies are
-added as SwiftPM packages. This is scripted:
-
-```bash
-cd example
-npm run setup-ios   # = pod install  +  ruby ../scripts/setup-ios.rb
-```
-
-`scripts/setup-ios.rb` (uses the `xcodeproj` gem that ships with CocoaPods):
-- adds the whole vendored Core (`ios/core/bitchat/**`) + the bridge
-  (`ios/MeshSdk.swift`, `ios/MeshSdk.m`, `ios/MeshSdkShims.swift`) to the app target;
-- adds the SwiftPM packages: **local** `BitFoundation`, `BitLogger`, `Tor`
-  (Arti, incl. its prebuilt `arti.xcframework`) from `ios/core/localPackages`,
-  and **remote** `P256K` (`swift-secp256k1` @ 0.21.1);
-- sets deployment target 16.0 (bitchat-ios's minimum) and `SWIFT_VERSION`.
-
-Because of this, iOS is **not** autolinked as a pod (`react-native.config.js`
-sets `ios: null`); the bridge registers via `RCT_EXTERN_MODULE` from the app target.
-
-Notes:
-- **Simulator builds must be arm64** (Apple Silicon) — Arti's xcframework ships
-  an arm64 simulator slice, not x86_64. Device builds use its `ios-arm64` slice.
-- `MeshSdkShims.swift` reproduces the few symbols from the un-vendored
-  `BitchatApp.swift` that the Core still references (`NotificationDelegate`,
-  `BitchatApp.bundleID/groupID`) — wrapper code, not a Core edit.
-- Re-run `npm run setup-ios` after every `npm run sync-core`.
-- CocoaPods needs a UTF-8 locale (`LANG=en_US.UTF-8`) or it crashes on
-  `ASCII-8BIT`; the npm scripts set it for you.
+Notes: iOS **simulator builds must be arm64** (Arti ships an arm64‑sim slice, not
+x86_64). Re‑run `setup-ios.rb` after every `npm run sync-core`.
 
 ## Usage
 
@@ -130,29 +86,53 @@ await MeshSdk.startServices();
 const sub = MeshSdk.onMessage((msg) => {
   console.log(`${msg.sender}: ${msg.content}`);
 });
-
 MeshSdk.onPeerSnapshotsUpdate((peers) => console.log('peers', peers));
 
-await MeshSdk.sendMessage('hello mesh');                       // broadcast
-await MeshSdk.sendPrivateMessage('hi', peerID, 'bob');         // E2E encrypted
+await MeshSdk.sendMessage('hello mesh');                 // public broadcast
+await MeshSdk.sendPrivateMessage('hi', peerID, 'bob');   // E2E encrypted (session ensured by the SDK)
 
+// later
 sub.remove();
 await MeshSdk.stopServices();
 ```
 
-See [`src/MeshSdk.ts`](src/MeshSdk.ts) for the full API and
-[`src/types.ts`](src/types.ts) for the data model.
+Full API in [`src/MeshSdk.ts`](src/MeshSdk.ts); data model in
+[`src/types.ts`](src/types.ts).
+
+## Architecture
+
+```
+React Native App
+   │  import { MeshSdk } from 'react-native-mesh-sdk'
+NPM module (TS)          src/            — typed facade + NativeEventEmitter
+   │  NativeModules.MeshSdk (bridge)
+Native SDK (wrapper)     android/src/main/java/com/meshsdk/ · ios/MeshSdk.*   ← the only glue we own
+   │  public MeshService (Android) / Transport (iOS)
+Core BitChat (vendored)  android/src/main/java/{com/bitchat,info,org} · ios/core   ← copied verbatim
+```
+
+All of our code lives in the wrapper layer. As long as the public
+`MeshService` / `Transport` surface is unchanged, an upstream BitChat update is a
+pure file copy.
+
+## Keeping Core BitChat up to date
+
+```bash
+# bitchat-android / bitchat-ios expected as siblings by default
+ANDROID_SRC=../bitchat-android IOS_SRC=../bitchat-ios npm run sync-core
+```
+
+This re‑vendors the full `com.bitchat.android` tree (+ Arti JNI, resources,
+`jniLibs`) into `android/src/main/java`, precompiles the southernstorm Noise
+library to `android/libs`, and copies the bitchat‑ios sources + `localPackages`
+into `ios/core`. Then rebuild (and re‑run `setup-ios.rb` for iOS). If the wrapper
+stops compiling, the public core surface changed — fix **only** the wrapper.
 
 ## Example app
 
-A BitChat-style client (nickname onboarding, public mesh chat, peer drawer,
-private E2E conversations, delivery receipts) lives in [`example/`](example/).
-
-```bash
-cd example
-npm install
-npm run ios      # or: npm run android
-```
+A full BitChat‑style client (nickname onboarding, public mesh chat, peer drawer,
+private E2E chats, delivery receipts) lives in a separate repo,
+**`mesh-chat-example`**, cloned next to this one.
 
 ## License
 
