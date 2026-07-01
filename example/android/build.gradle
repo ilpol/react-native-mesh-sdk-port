@@ -1,0 +1,27 @@
+buildscript {
+    ext {
+        buildToolsVersion = "35.0.0"
+        minSdkVersion = 26
+        compileSdkVersion = 35
+        targetSdkVersion = 35
+        ndkVersion = "26.1.10909125"
+        kotlinVersion = "2.0.21"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // AGP 8.6 supports compileSdk 35 and Kotlin 2.0 (RN 0.74's default 8.2.1
+        // caps at compileSdk 34). The vendored Core BitChat targets SDK 35.
+        classpath("com.android.tools.build:gradle:8.6.0")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        // Pin Kotlin explicitly to 2.0.21 — overrides the 1.9.22 that RN 0.74's
+        // gradle plugin pulls transitively. The vendored Core BitChat (built
+        // with Kotlin 2.x) + the Compose compiler plugin require 2.0+.
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        classpath("org.jetbrains.kotlin:compose-compiler-gradle-plugin:$kotlinVersion")
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"

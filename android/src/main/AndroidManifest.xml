@@ -1,0 +1,23 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Bluetooth LE mesh permissions — declared to MATCH bitchat-android exactly.
+         Core BitChat's BluetoothPermissionManager requires ACCESS_FINE/COARSE
+         LOCATION on ALL API levels (not just <31), and BLUETOOTH_SCAN is declared
+         WITHOUT neverForLocation because the core does use location. Capping
+         location at maxSdkVersion=30 (or using neverForLocation) makes the core
+         report "Has Permissions: false" on Android 12+ and the mesh never starts. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Legacy Bluetooth permissions (API < 31). -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
+    <!-- Location required by the core on ALL API levels. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+</manifest>
