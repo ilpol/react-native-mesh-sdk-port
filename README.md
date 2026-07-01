@@ -131,8 +131,17 @@ stops compiling, the public core surface changed — fix **only** the wrapper.
 ## Example app
 
 A full BitChat‑style client (nickname onboarding, public mesh chat, peer drawer,
-private E2E chats, delivery receipts) lives in a separate repo,
-**`mesh-chat-example`**, cloned next to this one.
+private E2E chats, delivery receipts) that consumes this package from npm lives
+in its own repo:
+
+**https://github.com/ilpol/react-native-mesh-sdk-port-examle**
+
+```bash
+git clone https://github.com/ilpol/react-native-mesh-sdk-port-examle
+cd react-native-mesh-sdk-port-examle
+npm install
+npm run android          # or: npm run setup-ios && npm run ios
+```
 
 ## License
 
