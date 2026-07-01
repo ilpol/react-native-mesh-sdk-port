@@ -1,7 +1,15 @@
 {
   "name": "react-native-mesh-sdk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Bluetooth mesh messaging for React Native, ported from the native BitChat cores (Android + iOS).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ilpol/react-native-mesh-sdk-port.git"
+  },
+  "homepage": "https://github.com/ilpol/react-native-mesh-sdk-port#readme",
+  "bugs": {
+    "url": "https://github.com/ilpol/react-native-mesh-sdk-port/issues"
+  },
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
   "types": "lib/typescript/index.d.ts",
