@@ -19,8 +19,8 @@ require "xcodeproj"
 
 SDK_ROOT   = File.expand_path("..", __dir__)                 # react-native-mesh-sdk
 IOS_DIR    = File.join(SDK_ROOT, "ios")                      # bridge + core live here
-CORE_DIR   = File.join(IOS_DIR, "core", "bitchat")          # vendored bitchat sources
-LOCAL_PKGS = File.join(IOS_DIR, "core", "localPackages")   # BitFoundation/BitLogger/Arti
+CORE_DIR   = File.join(IOS_DIR, "bitchat")                  # vendored bitchat sources
+LOCAL_PKGS = File.join(IOS_DIR, "localPackages")           # BitFoundation/BitLogger/Arti
 
 # The example app is a sibling repo (../mesh-chat-example); pass the .xcodeproj
 # path explicitly (the example's `npm run setup-ios` does this). Fall back to the

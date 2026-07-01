@@ -108,7 +108,7 @@ NPM module (TS)          src/            — typed facade + NativeEventEmitter
    │  NativeModules.MeshSdk (bridge)
 Native SDK (wrapper)     android/src/main/java/com/meshsdk/ · ios/MeshSdk.*   ← the only glue we own
    │  public MeshService (Android) / Transport (iOS)
-Core BitChat (vendored)  android/src/main/java/{com/bitchat,info,org} · ios/core   ← copied verbatim
+Core BitChat (vendored)  android/src/main/java/{com/bitchat,info,org} · ios/{bitchat,localPackages}   ← copied verbatim
 ```
 
 All of our code lives in the wrapper layer. As long as the public
@@ -124,8 +124,8 @@ ANDROID_SRC=../bitchat-android IOS_SRC=../bitchat-ios npm run sync-core
 
 This re‑vendors the full `com.bitchat.android` tree (+ Arti JNI, resources,
 `jniLibs`) into `android/src/main/java`, precompiles the southernstorm Noise
-library to `android/libs`, and copies the bitchat‑ios sources + `localPackages`
-into `ios/core`. Then rebuild (and re‑run `setup-ios.rb` for iOS). If the wrapper
+library to `android/libs`, and copies the bitchat‑ios sources into `ios/bitchat`
++ `ios/localPackages`. Then rebuild (and re‑run `setup-ios.rb` for iOS). If the wrapper
 stops compiling, the public core surface changed — fix **only** the wrapper.
 
 ## Example app

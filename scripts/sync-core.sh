@@ -23,7 +23,11 @@ IOS_SRC="${IOS_SRC:-$HERE/../bitchat-ios}"
 # compiler reliably picks up the core's mixed .kt + .java sources (e.g. the
 # southernstorm Noise library) as Java source roots.
 ANDROID_CORE="$HERE/android/src/main/java"
-IOS_CORE="$HERE/ios/core"
+# The iOS vendored core lives flat under ios/ (ios/bitchat + ios/localPackages),
+# alongside the wrapper (ios/MeshSdk.*) — mirroring Android, which has no `core`
+# folder either. IOS_CORE is the ios/ dir; only bitchat/ + localPackages/ are
+# replaced on sync (never the wrapper files at the ios/ root).
+IOS_CORE="$HERE/ios"
 
 log() { printf '\033[36m[sync-core]\033[0m %s\n' "$*"; }
 
@@ -58,6 +62,12 @@ sync_android() {
   if [[ -d "$ANDROID_SRC/app/src/main/res" ]]; then
     rm -rf "$HERE/android/src/main/res"; mkdir -p "$HERE/android/src/main/res"
     cp -R "$ANDROID_SRC/app/src/main/res/." "$HERE/android/src/main/res/"
+    # Drop bitchat's UI string TRANSLATIONS (values-<lang>). The RN host provides
+    # the UI, so these are unused; the base values/ + config qualifiers
+    # (values-night, values-v##, …) are kept so nothing falls back to a missing
+    # resource. Saves ~0.9 MB of source and keeps the vendored tree lean.
+    ( cd "$HERE/android/src/main/res" && \
+      ls -d values-* 2>/dev/null | grep -E '^values-[a-z]{2,3}(-r[A-Z]{2,3})?$' | xargs -r rm -rf )
   fi
   if [[ -d "$ANDROID_SRC/app/src/main/assets" ]]; then
     mkdir -p "$HERE/android/src/main/assets"
@@ -119,7 +129,8 @@ sync_ios() {
     log "SKIP ios: $IOS_SRC/bitchat not found (set IOS_SRC)"; return
   fi
   log "iOS core <- $IOS_SRC (full tree)"
-  rm -rf "$IOS_CORE"
+  # Replace ONLY the vendored dirs — never the wrapper files at the ios/ root.
+  rm -rf "$IOS_CORE/bitchat" "$IOS_CORE/localPackages"
   mkdir -p "$IOS_CORE"
 
   cp -R "$IOS_SRC/bitchat" "$IOS_CORE/bitchat"
