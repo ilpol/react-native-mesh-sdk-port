@@ -805,9 +805,9 @@
 			);
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
-				F9E43D08D578DF28467B089E /* XCLocalSwiftPackageReference "../../ios/core/localPackages/BitFoundation" */,
-				8C8A667993F37DD3A7E770E6 /* XCLocalSwiftPackageReference "../../ios/core/localPackages/BitLogger" */,
-				9B02EC3B49F8A3B61E4B8519 /* XCLocalSwiftPackageReference "../../ios/core/localPackages/Arti" */,
+				F9E43D08D578DF28467B089E /* XCLocalSwiftPackageReference "BitFoundation" */,
+				8C8A667993F37DD3A7E770E6 /* XCLocalSwiftPackageReference "BitLogger" */,
+				9B02EC3B49F8A3B61E4B8519 /* XCLocalSwiftPackageReference "Arti" */,
 				83E63BA2326D3EAC050A3F1F /* XCRemoteSwiftPackageReference "swift-secp256k1" */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
@@ -865,13 +865,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample/Pods-MeshChatExample-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample/Pods-MeshChatExample-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -930,13 +926,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample-MeshChatExampleTests/Pods-MeshChatExample-MeshChatExampleTests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample-MeshChatExampleTests/Pods-MeshChatExample-MeshChatExampleTests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -951,13 +943,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample/Pods-MeshChatExample-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample/Pods-MeshChatExample-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -972,13 +960,9 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample-MeshChatExampleTests/Pods-MeshChatExample-MeshChatExampleTests-resources-${CONFIGURATION}-input-files.xcfilelist",
 			);
-			inputPaths = (
-			);
 			name = "[CP] Copy Pods Resources";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-MeshChatExample-MeshChatExampleTests/Pods-MeshChatExample-MeshChatExampleTests-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -1382,7 +1366,10 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
@@ -1454,7 +1441,10 @@
 					"-DFOLLY_CFG_NO_COROUTINES=1",
 					"-DFOLLY_HAVE_CLOCK_GETTIME=1",
 				);
-				OTHER_LDFLAGS = "$(inherited)  ";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					" ",
+				);
 				REACT_NATIVE_PATH = "${PODS_ROOT}/../../node_modules/react-native";
 				SDKROOT = iphoneos;
 				USE_HERMES = true;
@@ -1495,15 +1485,15 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		8C8A667993F37DD3A7E770E6 /* XCLocalSwiftPackageReference "../../ios/core/localPackages/BitLogger" */ = {
+		8C8A667993F37DD3A7E770E6 /* XCLocalSwiftPackageReference "BitLogger" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../ios/core/localPackages/BitLogger;
 		};
-		9B02EC3B49F8A3B61E4B8519 /* XCLocalSwiftPackageReference "../../ios/core/localPackages/Arti" */ = {
+		9B02EC3B49F8A3B61E4B8519 /* XCLocalSwiftPackageReference "Arti" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../ios/core/localPackages/Arti;
 		};
-		F9E43D08D578DF28467B089E /* XCLocalSwiftPackageReference "../../ios/core/localPackages/BitFoundation" */ = {
+		F9E43D08D578DF28467B089E /* XCLocalSwiftPackageReference "BitFoundation" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../ios/core/localPackages/BitFoundation;
 		};
@@ -1523,7 +1513,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		2F2400D91D21AF61B650888B /* BitLogger */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 8C8A667993F37DD3A7E770E6 /* XCLocalSwiftPackageReference "../../ios/core/localPackages/BitLogger" */;
+			package = 8C8A667993F37DD3A7E770E6 /* XCLocalSwiftPackageReference "BitLogger" */;
 			productName = BitLogger;
 		};
 		D11F8E097BDB6EC7DB0089C6 /* P256K */ = {
@@ -1533,12 +1523,12 @@
 		};
 		DC6F5C999A93B960932F5B58 /* Tor */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 9B02EC3B49F8A3B61E4B8519 /* XCLocalSwiftPackageReference "../../ios/core/localPackages/Arti" */;
+			package = 9B02EC3B49F8A3B61E4B8519 /* XCLocalSwiftPackageReference "Arti" */;
 			productName = Tor;
 		};
 		E553C13E6BCC0F74B8F3E43A /* BitFoundation */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = F9E43D08D578DF28467B089E /* XCLocalSwiftPackageReference "../../ios/core/localPackages/BitFoundation" */;
+			package = F9E43D08D578DF28467B089E /* XCLocalSwiftPackageReference "BitFoundation" */;
 			productName = BitFoundation;
 		};
 /* End XCSwiftPackageProductDependency section */

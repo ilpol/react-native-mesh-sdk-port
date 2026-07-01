@@ -192,9 +192,21 @@ export function useMesh(initialNickname: string) {
     []
   );
 
+  /**
+   * Optional warm-up: start the Noise handshake early (e.g. when a chat opens)
+   * so the first message sends instantly. Delivery itself is guaranteed by the
+   * SDK — MeshSdk.sendPrivateMessage establishes the session before sending — so
+   * this is purely a latency optimization, fire-and-forget.
+   */
+  const warmUpSession = useCallback((peerID: string) => {
+    MeshSdk.initiateNoiseHandshake(peerID).catch(() => {});
+  }, []);
+
   const sendPrivate = useCallback(
     async (peerID: string, nickname: string, content: string) => {
       if (!content.trim()) return;
+      // The SDK ensures the Noise session before sending, so the first private
+      // message is no longer dropped — just send.
       const id = await MeshSdk.sendPrivateMessage(content.trim(), peerID, nickname);
       upsertPrivate(peerID, {
         id,
@@ -223,5 +235,5 @@ export function useMesh(initialNickname: string) {
     await MeshSdk.sendReadReceipt(messageID, peerID, nicknameRef.current);
   }, []);
 
-  return { state, sendPublic, sendPrivate, setNickname, markRead };
+  return { state, sendPublic, sendPrivate, setNickname, markRead, warmUpSession };
 }

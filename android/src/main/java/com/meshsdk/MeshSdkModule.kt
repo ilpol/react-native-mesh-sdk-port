@@ -189,6 +189,12 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod fun setNickname(value: String, promise: Promise) = guard(promise) {
         nickname = value
+        // The Core builds identity announcements from NicknameProvider →
+        // DataManager, NOT from MeshDelegate.getNickname(). Persist it there or
+        // peers see the auto-generated "anon####" default instead of this name.
+        runCatching {
+            com.bitchat.android.ui.DataManager(reactContext.applicationContext).saveNickname(value)
+        }
         // Re-announce so peers pick up the new nickname.
         runCatching { mesh.sendBroadcastAnnounce() }
         null
@@ -221,10 +227,35 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
         recipientNickname: String,
         messageID: String?,
         promise: Promise
-    ) = guard(promise) {
+    ) {
         val id = messageID ?: java.util.UUID.randomUUID().toString().uppercase()
-        mesh.sendPrivateMessage(content, recipientPeerID, recipientNickname, id)
-        id
+        // Off the bridge thread: establish the Noise session first, then send.
+        Thread {
+            try {
+                ensureSessionBlocking(recipientPeerID, 6000L)
+                mesh.sendPrivateMessage(content, recipientPeerID, recipientNickname, id)
+                promise.resolve(id)
+            } catch (e: Throwable) {
+                promise.reject("mesh_error", e.message, e)
+            }
+        }.start()
+    }
+
+    /**
+     * Guarantees an established Noise session before the first private message.
+     * The Core "fires and forgets" the first PM when no session exists (it only
+     * kicks off the handshake), so without this the first message is dropped.
+     * Triggers the handshake and blocks (off-bridge) until it completes or times
+     * out; then the caller sends over the ready session.
+     */
+    private fun ensureSessionBlocking(peerID: String, timeoutMs: Long) {
+        if (runCatching { mesh.hasEstablishedSession(peerID) }.getOrDefault(false)) return
+        runCatching { mesh.initiateNoiseHandshake(peerID) }
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            Thread.sleep(150)
+            if (runCatching { mesh.hasEstablishedSession(peerID) }.getOrDefault(false)) return
+        }
     }
 
     @ReactMethod

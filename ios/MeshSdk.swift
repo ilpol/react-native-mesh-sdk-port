@@ -136,12 +136,32 @@ final class MeshSdk: RCTEventEmitter {
 
     @objc(sendPrivateMessage:recipientPeerID:recipientNickname:messageID:resolver:rejecter:)
     func sendPrivateMessage(_ content: String, recipientPeerID: String, recipientNickname: String,
-                            messageID: String?, resolver resolve: RCTPromiseResolveBlock,
-                            rejecter reject: RCTPromiseRejectBlock) {
+                            messageID: String?, resolver resolve: @escaping RCTPromiseResolveBlock,
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
         let id = messageID ?? UUID().uuidString
-        transport.sendPrivateMessage(content, to: peerID(recipientPeerID),
-                                     recipientNickname: recipientNickname, messageID: id)
-        resolve(id)
+        let peer = peerID(recipientPeerID)
+        // Off the bridge: establish the Noise session first, then send, so the
+        // first private message isn't dropped by the Core's fire-and-forget.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            self.ensureSessionBlocking(peer, timeout: 6.0)
+            self.transport.sendPrivateMessage(content, to: peer,
+                                              recipientNickname: recipientNickname, messageID: id)
+            resolve(id)
+        }
+    }
+
+    /// Guarantees an established Noise session before the first private message
+    /// (the Core fire-and-forgets the first PM otherwise). Triggers the
+    /// handshake and blocks off-bridge until it completes or times out.
+    private func ensureSessionBlocking(_ peer: PeerID, timeout: TimeInterval) {
+        if transport.noiseSessionPublicKeyData(for: peer) != nil { return }
+        transport.triggerHandshake(with: peer)
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.15)
+            if transport.noiseSessionPublicKeyData(for: peer) != nil { return }
+        }
     }
 
     @objc(sendReadReceipt:recipientPeerID:readerNickname:resolver:rejecter:)
@@ -396,6 +416,41 @@ extension MeshSdk: BitchatDelegate {
 
     func didUpdateMessageDeliveryStatus(_ messageID: String, status: DeliveryStatus) {
         emit("onDeliveryStatusUpdate", ["messageID": messageID, "status": deliveryStatusToDict(status)])
+    }
+
+    // Private (Noise-encrypted) messages arrive here as a raw payload that the
+    // app must decode — the transport does NOT turn them into BitchatMessages.
+    // Without this, incoming private messages (e.g. Android → iOS) are dropped.
+    func didReceiveNoisePayload(from peerID: PeerID, type: NoisePayloadType, payload: Data, timestamp: Date) {
+        switch type {
+        case .privateMessage:
+            guard let packet = PrivateMessagePacket.decode(from: payload) else { return }
+            let sender = transport.peerNickname(peerID: peerID) ?? peerID.id
+            emit("onMessage", [
+                "id": packet.messageID,
+                "sender": sender,
+                "content": packet.content,
+                "type": "message",
+                "timestamp": timestamp.timeIntervalSince1970 * 1000,
+                "isRelay": false,
+                "isPrivate": true,
+                "isEncrypted": true,
+                "senderPeerID": peerID.id,
+                "recipientNickname": transport.myNickname,
+            ])
+            // Acknowledge delivery so the sender's message shows as delivered.
+            transport.sendDeliveryAck(for: packet.messageID, to: peerID)
+        case .delivered:
+            if let mid = String(data: payload, encoding: .utf8) {
+                emit("onDeliveryAck", ["messageID": mid, "recipientPeerID": peerID.id])
+            }
+        case .readReceipt:
+            if let mid = String(data: payload, encoding: .utf8) {
+                emit("onReadReceipt", ["messageID": mid, "recipientPeerID": peerID.id])
+            }
+        default:
+            break
+        }
     }
 
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {

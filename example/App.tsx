@@ -48,7 +48,7 @@ function Onboarding({ onDone }: { onDone: (nick: string) => void }) {
 }
 
 function Chat({ nickname }: { nickname: string }) {
-  const { state, sendPublic, sendPrivate } = useMesh(nickname);
+  const { state, sendPublic, sendPrivate, warmUpSession } = useMesh(nickname);
   const [activePeer, setActivePeer] = useState<MeshPeer | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
@@ -96,7 +96,12 @@ function Chat({ nickname }: { nickname: string }) {
               peers={state.peers}
               activePeerID={activePeer?.peerID ?? null}
               onSelectPublic={() => { setActivePeer(null); setDrawerOpen(false); }}
-              onSelectPeer={(p) => { setActivePeer(p); setDrawerOpen(false); }}
+              onSelectPeer={(p) => {
+                setActivePeer(p);
+                setDrawerOpen(false);
+                // Warm up the handshake on open (latency only; delivery is guaranteed by the SDK).
+                warmUpSession(p.peerID);
+              }}
             />
           </View>
         )}

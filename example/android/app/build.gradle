@@ -81,6 +81,14 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // Package only real-device ABIs. Drops x86/x86_64 (emulator-only; on
+        // Apple Silicon the emulators are arm64 anyway), which removes ~48 MB of
+        // native libs — including 4 copies of the 5 MB Tor lib. This is a build
+        // config in the app, NOT a Core change, so Core stays drop-in updatable.
+        // For max reduction on modern phones, use ["arm64-v8a"] only.
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
     }
     signingConfigs {
         debug {
