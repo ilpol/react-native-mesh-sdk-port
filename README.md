@@ -9,6 +9,12 @@ Android and iOS.
 - 📢 **Public broadcast** channel to all nearby peers
 - 👥 Live **peer list** with nicknames, RSSI and encryption state
 - ✅ Delivery / read receipts
+- 🆔 **Private network** — override the BLE service/characteristic UUIDs so your
+  app forms its own mesh, isolated from other deployments (`setMeshId`)
+- 🔋 **Background operation** (Android) — a foreground service keeps the mesh
+  alive when the app is backgrounded
+- 🔔 **Local notifications** for incoming private messages, with an on/off toggle
+- 📶 **Bluetooth state** events + a helper to prompt the user to enable Bluetooth
 - 🧩 The full BitChat core is **vendored verbatim** — updating to a new BitChat
   release is a single `npm run sync-core`, no forking of upstream classes.
 
@@ -35,11 +41,17 @@ npm install react-native-mesh-sdk
 ### Android (autolinked)
 
 Nothing to wire up — the module autolinks. The library ships the required
-Bluetooth/location permissions; request them at runtime (see the example's
+Bluetooth/location/foreground‑service permissions and the background service
+declaration; request the runtime ones at startup (see the example's
 `useMesh.ts`). Core BitChat requires, on **all** API levels:
 
 `BLUETOOTH_SCAN`, `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`,
 `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`.
+
+For background operation + notifications the manifest also declares
+`FOREGROUND_SERVICE(_CONNECTED_DEVICE|_DATA_SYNC|_LOCATION)` and, on Android 13+,
+`POST_NOTIFICATIONS` — request `POST_NOTIFICATIONS` at runtime to get the
+background‑service and message notifications (the mesh still runs without it).
 
 ### iOS (scripted — not a CocoaPods autolink)
 
@@ -80,8 +92,16 @@ x86_64). Re‑run `setup-ios.rb` after every `npm run sync-core`.
 ```ts
 import { MeshSdk } from 'react-native-mesh-sdk';
 
+// Optional: form your OWN private mesh (must match on every device, call BEFORE
+// startServices). Omit to use the SDK default network.
+await MeshSdk.setMeshId(
+  '4D455348-0000-4000-8000-00000000C0DE', // service UUID
+  '4D455348-0000-4000-8000-00000000DA7A', // characteristic UUID
+);
+
 await MeshSdk.setNickname('alice');
-await MeshSdk.startServices();
+await MeshSdk.setNotificationsEnabled(true);   // local DM notifications (default on)
+await MeshSdk.startServices();                 // also starts the Android background service
 
 const sub = MeshSdk.onMessage((msg) => {
   console.log(`${msg.sender}: ${msg.content}`);
@@ -95,6 +115,26 @@ await MeshSdk.sendPrivateMessage('hi', peerID, 'bob');   // E2E encrypted (sessi
 sub.remove();
 await MeshSdk.stopServices();
 ```
+
+### Bluetooth state & notifications
+
+```ts
+// Prompt the user to turn Bluetooth on when it's off.
+MeshSdk.addListener('onBluetoothStateChange', ({ state }) => {
+  if (state === 'poweredOff') MeshSdk.enableBluetooth();  // Android: system dialog; iOS: opens Settings
+});
+
+// Suppress notifications for the chat that's currently on screen
+// (null = public feed / none). Toggle notifications at any time.
+await MeshSdk.setActiveChatPeer(peerID);
+await MeshSdk.setNotificationsEnabled(false);
+```
+
+On Android, DM notifications fire when the app is backgrounded (or foregrounded
+but not viewing that chat). If the app is fully killed, the background service
+keeps the mesh alive and shows the notification itself. **History is not
+persisted by the SDK** (Core BitChat is ephemeral by design) — persist messages
+in your app if you need them across restarts; see the example's `useMesh.ts`.
 
 Full API in [`src/MeshSdk.ts`](src/MeshSdk.ts); data model in
 [`src/types.ts`](src/types.ts).
