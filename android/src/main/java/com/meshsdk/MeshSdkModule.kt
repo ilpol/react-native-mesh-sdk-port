@@ -1,5 +1,11 @@
 package com.meshsdk
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.util.Base64
 import com.bitchat.android.mesh.BluetoothMeshService
 import com.bitchat.android.mesh.MeshDelegate
@@ -8,7 +14,12 @@ import com.bitchat.android.mesh.UnifiedMeshService
 import com.bitchat.android.model.BitchatFilePacket
 import com.bitchat.android.model.BitchatMessage
 import com.bitchat.android.noise.NoiseSession
+import androidx.core.app.NotificationManagerCompat
+import com.bitchat.android.ui.NotificationManager as CoreNotificationManager
+import com.bitchat.android.ui.NotificationTextUtils
+import com.bitchat.android.util.NotificationIntervalManager
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -31,7 +42,13 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
  * dropping in an updated Core BitChat is a pure file copy — see sync-core.sh.
  */
 class MeshSdkModule(private val reactContext: ReactApplicationContext) :
-    ReactContextBaseJavaModule(reactContext), MeshDelegate {
+    ReactContextBaseJavaModule(reactContext), MeshDelegate, LifecycleEventListener {
+
+    init {
+        // Track foreground/background so DM notifications only fire when the user
+        // isn't actively looking at the app (mirrors bitchat behaviour).
+        reactContext.addLifecycleEventListener(this)
+    }
 
     companion object {
         const val NAME = "MeshSdk"
@@ -119,12 +136,110 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
         listenerCount = (listenerCount - count).coerceAtLeast(0)
     }
 
+    // ---- Bluetooth adapter state -------------------------------------------
+    // Core BitChat drives the mesh but doesn't surface adapter on/off to JS on
+    // Android (iOS gets it via CBManagerState). We watch it here so the app can
+    // prompt the user to turn Bluetooth on — using the SAME onBluetoothStateChange
+    // event and BluetoothState values the iOS wrapper emits.
+
+    private fun bluetoothAdapter(): BluetoothAdapter? =
+        (reactContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+
+    /** Maps the platform adapter state onto the shared `BluetoothState` strings. */
+    private fun currentBluetoothState(): String {
+        val adapter = bluetoothAdapter() ?: return "unsupported"
+        return when (adapter.state) {
+            BluetoothAdapter.STATE_ON -> "poweredOn"
+            BluetoothAdapter.STATE_OFF -> "poweredOff"
+            BluetoothAdapter.STATE_TURNING_ON, BluetoothAdapter.STATE_TURNING_OFF -> "resetting"
+            else -> "unknown"
+        }
+    }
+
+    private var bluetoothReceiver: BroadcastReceiver? = null
+
+    private fun registerBluetoothReceiver() {
+        if (bluetoothReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                    val payload = Arguments.createMap()
+                    payload.putString("state", currentBluetoothState())
+                    emit("onBluetoothStateChange", payload)
+                }
+            }
+        }
+        // Android 14 (API 34+, our targetSdk) requires an explicit export flag or
+        // registerReceiver throws SecurityException and crashes the app. This is a
+        // system/protected broadcast, so NOT_EXPORTED is correct. ContextCompat
+        // handles the flag safely across API levels.
+        androidx.core.content.ContextCompat.registerReceiver(
+            reactContext,
+            receiver,
+            IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        bluetoothReceiver = receiver
+    }
+
+    private fun unregisterBluetoothReceiver() {
+        bluetoothReceiver?.let { runCatching { reactContext.unregisterReceiver(it) } }
+        bluetoothReceiver = null
+    }
+
+    // ---- Local notifications ------------------------------------------------
+    // Drives Core BitChat's own NotificationManager verbatim. While the app is
+    // alive our delegate is attached, so Core's internal "delegate == null" DM
+    // path never fires — we own notifications here (and honour the toggle). When
+    // the app is fully killed, only the foreground service runs and Core shows
+    // the notification itself.
+
+    @Volatile private var notificationsEnabled = true
+
+    private val coreNotifications: CoreNotificationManager by lazy {
+        val app = reactContext.applicationContext
+        CoreNotificationManager(
+            app,
+            NotificationManagerCompat.from(app),
+            NotificationIntervalManager()
+        )
+    }
+
+    /** Enable/disable local DM notifications (the in-code toggle). */
+    @ReactMethod fun setNotificationsEnabled(enabled: Boolean, promise: Promise) = guard(promise) {
+        notificationsEnabled = enabled
+        if (!enabled) coreNotifications.clearAllNotifications()
+        null
+    }
+
+    /**
+     * Tell the SDK which private chat is on screen (null = none/public) so it
+     * won't notify for the conversation the user is already viewing.
+     */
+    @ReactMethod fun setActiveChatPeer(peerID: String?, promise: Promise) = guard(promise) {
+        coreNotifications.setCurrentPrivateChatPeer(peerID)
+        peerID?.let { coreNotifications.clearNotificationsForSender(it) }
+        null
+    }
+
+    // LifecycleEventListener — keep Core's background flag in sync.
+    override fun onHostResume() { coreNotifications.setAppBackgroundState(false) }
+    override fun onHostPause() { coreNotifications.setAppBackgroundState(true) }
+    override fun onHostDestroy() { coreNotifications.setAppBackgroundState(true) }
+
     // =====================================================================
     // MeshDelegate — Core BitChat callbacks → JS events
     // =====================================================================
 
     override fun didReceiveMessage(message: BitchatMessage) {
         emit("onMessage", MeshSdkMapper.messageToMap(message))
+        // Show a DM notification (Core self-gates on background / current chat).
+        if (notificationsEnabled && message.isPrivate) {
+            message.senderPeerID?.let { peerID ->
+                val preview = NotificationTextUtils.buildPrivateMessagePreview(message)
+                coreNotifications.showPrivateMessageNotification(peerID, message.sender, preview)
+            }
+        }
     }
 
     override fun didUpdatePeerList(peers: List<String>) {
@@ -208,12 +323,44 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
         // same instance via MeshServiceHolder and no-ops if background is
         // disabled or the notification/BT permissions are missing.
         com.bitchat.android.service.MeshForegroundService.start(reactContext.applicationContext)
+        // Watch adapter on/off and push the current state right away so the UI
+        // can prompt to enable Bluetooth even if it's already off at startup.
+        registerBluetoothReceiver()
+        val payload = Arguments.createMap()
+        payload.putString("state", currentBluetoothState())
+        emit("onBluetoothStateChange", payload)
         null
     }
 
     @ReactMethod fun stopServices(promise: Promise) = guard(promise) {
+        unregisterBluetoothReceiver()
         com.bitchat.android.service.MeshForegroundService.stop(reactContext.applicationContext)
         mesh.stopServices(); null
+    }
+
+    /** Current Bluetooth adapter state as a `BluetoothState` string. */
+    @ReactMethod fun getBluetoothState(promise: Promise) = guard(promise) {
+        currentBluetoothState()
+    }
+
+    /**
+     * Ask the user to enable Bluetooth. Shows the system enable dialog via the
+     * current Activity (falls back to a settings intent if none is available).
+     * Resolves true once the request is dispatched — the actual result arrives
+     * asynchronously via onBluetoothStateChange.
+     */
+    @ReactMethod fun enableBluetooth(promise: Promise) = guard(promise) {
+        val adapter = bluetoothAdapter() ?: return@guard false
+        if (adapter.isEnabled) return@guard true
+        val activity = currentActivity
+        val intent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        if (activity != null) {
+            activity.startActivity(intent)
+        } else {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            reactContext.startActivity(intent)
+        }
+        true
     }
 
     @ReactMethod fun emergencyDisconnectAll(promise: Promise) = guard(promise) {
@@ -459,6 +606,12 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod fun clearAllEncryptionData(promise: Promise) = guard(promise) {
         mesh.clearAllEncryptionData(); null
+    }
+
+    override fun invalidate() {
+        unregisterBluetoothReceiver()
+        reactContext.removeLifecycleEventListener(this)
+        super.invalidate()
     }
 
     // ---- helpers ------------------------------------------------------------

@@ -20,6 +20,14 @@ export interface Spec {
   stopServices(): Promise<void>;
   emergencyDisconnectAll(): Promise<void>;
 
+  // Bluetooth adapter
+  getBluetoothState(): Promise<string>;
+  enableBluetooth(): Promise<boolean>;
+
+  // Local notifications
+  setNotificationsEnabled(enabled: boolean): Promise<void>;
+  setActiveChatPeer(peerID: string | null): Promise<void>;
+
   // Identity
   getMyPeerID(): Promise<string>;
   setNickname(nickname: string): Promise<void>;

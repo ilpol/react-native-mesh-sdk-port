@@ -19,6 +19,7 @@ import Foundation
 import React
 import Combine
 import CoreBluetooth
+import UIKit
 import BitFoundation
 
 @objc(MeshSdk)
@@ -42,6 +43,15 @@ final class MeshSdk: RCTEventEmitter {
     }()
 
     private var hasListeners = false
+
+    /// Latest Bluetooth adapter state, kept in sync via didUpdateBluetoothState
+    /// so getBluetoothState() can answer synchronously.
+    private var lastBluetoothState = "unknown"
+
+    /// Local DM notifications — in-code toggle + the chat currently on screen
+    /// (so we don't notify for a conversation the user is already viewing).
+    private var notificationsEnabled = true
+    private var activeChatPeer: String?
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - RCTEventEmitter plumbing
@@ -101,6 +111,7 @@ final class MeshSdk: RCTEventEmitter {
     @objc(startServices:rejecter:)
     func startServices(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
         transport.startServices()
+        if notificationsEnabled { NotificationService.shared.requestAuthorization() }
         resolve(nil)
     }
 
@@ -114,6 +125,52 @@ final class MeshSdk: RCTEventEmitter {
     func emergencyDisconnectAll(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
         transport.emergencyDisconnectAll()
         resolve(nil)
+    }
+
+    // MARK: - Bluetooth state
+
+    @objc(getBluetoothState:rejecter:)
+    func getBluetoothState(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+        resolve(lastBluetoothState)
+    }
+
+    /// iOS apps cannot toggle Bluetooth programmatically — the user must enable
+    /// it in Settings/Control Center. We open the app's Settings page as the
+    /// closest actionable step; JS should also show guidance text.
+    @objc(enableBluetooth:rejecter:)
+    func enableBluetooth(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+        DispatchQueue.main.async {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
+        }
+        resolve(false)
+    }
+
+    // MARK: - Notifications
+
+    /// Enable/disable local DM notifications (the in-code toggle).
+    @objc(setNotificationsEnabled:resolver:rejecter:)
+    func setNotificationsEnabled(_ enabled: Bool, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+        notificationsEnabled = enabled
+        if enabled { NotificationService.shared.requestAuthorization() }
+        resolve(nil)
+    }
+
+    /// Tell the SDK which private chat is on screen (null = none/public).
+    @objc(setActiveChatPeer:resolver:rejecter:)
+    func setActiveChatPeer(_ peerID: NSString?, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+        activeChatPeer = peerID as String?
+        resolve(nil)
+    }
+
+    /// Show a DM notification unless disabled or the user is already viewing this
+    /// chat in the foreground. iOS presents it automatically when backgrounded.
+    fileprivate func notifyPrivateMessage(from sender: String, content: String, peerID: PeerID) {
+        guard notificationsEnabled else { return }
+        let inForeground = UIApplication.shared.applicationState == .active
+        if inForeground && activeChatPeer == peerID.id { return }
+        NotificationService.shared.sendPrivateMessageNotification(from: sender, message: content, peerID: peerID)
     }
 
     // MARK: - Identity
@@ -459,6 +516,7 @@ extension MeshSdk: BitchatDelegate {
                 "senderPeerID": peerID.id,
                 "recipientNickname": transport.myNickname,
             ])
+            notifyPrivateMessage(from: sender, content: packet.content, peerID: peerID)
             // Acknowledge delivery so the sender's message shows as delivered.
             transport.sendDeliveryAck(for: packet.messageID, to: peerID)
         case .delivered:
@@ -498,6 +556,7 @@ extension MeshSdk: BitchatDelegate {
         case .unsupported: str = "unsupported"
         default: str = "unknown"
         }
+        lastBluetoothState = str
         emit("onBluetoothStateChange", ["state": str])
     }
 }

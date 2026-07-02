@@ -7,6 +7,7 @@ import type {
   MeshPeer,
   MeshFilePacket,
   NoiseSessionState,
+  BluetoothState,
 } from './types';
 
 /**
@@ -52,6 +53,46 @@ class MeshSdkClass {
   /** Force-disconnect every peer (panic / privacy action). */
   emergencyDisconnectAll(): Promise<void> {
     return Native.emergencyDisconnectAll();
+  }
+
+  // ---- Bluetooth adapter ---------------------------------------------------
+
+  /** Current Bluetooth adapter state (same values as `onBluetoothStateChange`). */
+  getBluetoothState(): Promise<BluetoothState> {
+    return Native.getBluetoothState() as Promise<BluetoothState>;
+  }
+
+  /**
+   * Prompt the user to enable Bluetooth.
+   * - Android: shows the system "allow this app to turn on Bluetooth?" dialog.
+   *   Resolves `true` once dispatched; watch `onBluetoothStateChange` for the result.
+   * - iOS: cannot toggle Bluetooth programmatically — opens the app's Settings
+   *   page and resolves `false`. Show guidance to enable it in Control Center.
+   */
+  enableBluetooth(): Promise<boolean> {
+    return Native.enableBluetooth();
+  }
+
+  // ---- Notifications -------------------------------------------------------
+
+  /**
+   * Enable/disable local notifications for incoming private messages.
+   * Notifications fire when the app is backgrounded, or foregrounded but not
+   * viewing that conversation (see {@link setActiveChatPeer}). Enabled by default.
+   *
+   * Note (Android): if the app is fully killed while the background service keeps
+   * the mesh alive, Core still shows the DM notification regardless of this flag.
+   */
+  setNotificationsEnabled(enabled: boolean): Promise<void> {
+    return Native.setNotificationsEnabled(enabled);
+  }
+
+  /**
+   * Tell the SDK which private chat is currently on screen (`null` for none or
+   * the public feed) so it won't notify for a conversation the user is viewing.
+   */
+  setActiveChatPeer(peerID: string | null): Promise<void> {
+    return Native.setActiveChatPeer(peerID);
   }
 
   // ---- Identity ------------------------------------------------------------
