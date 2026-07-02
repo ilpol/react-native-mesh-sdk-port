@@ -153,27 +153,28 @@ sync_ios() {
   log "iOS done. Wire into the example project with: ruby scripts/setup-ios.rb"
 }
 
-# Re-apply our distinct BLE UUIDs so the SDK forms its OWN private mesh, separate
-# from the official bitchat app (which uses the upstream UUIDs). Upstream:
-#   service  F47B5E2D-…-4B5C (mainnet) / …-4B5A (testnet)
-#   char     A1B2C3D4-…-4C5D
-# Remapped to unique values (kept identical to the manual edits in
-# AppConstants.kt / BLEService.swift so a re-sync restores them).
-patch_mesh_uuids() {
-  local n=0 f
-  while IFS= read -r f; do
-    perl -i -pe '
-      s/F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C/7A9C1E3D-2B4F-4A6C-8D5E-1F2A3B4C5D6E/g;
-      s/F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5A/7A9C1E3D-2B4F-4A6C-8D5E-1F2A3B4C5D6C/g;
-      s/A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D/8B0D2F4E-3C5A-4B7D-9E6F-2A3B4C5D6E7F/g;
-    ' "$f"
-    n=$((n + 1))
-  done < <(grep -rl "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5\|A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D" \
-             "$ANDROID_CORE" "$IOS_CORE/bitchat" 2>/dev/null)
-  log "Patched BLE UUIDs for private mesh in $n file(s)."
+# The mesh UUID VALUE now lives in the SDK wrapper (MeshSdkModule /
+# MeshSdk.swift), which injects it before the BLE stack starts. So we don't patch
+# the upstream values — we only make the constants MUTABLE so the wrapper can set
+# them: Android `val`->`var`, iOS collapse the #if/`let` into a single `static var`.
+patch_mesh_uuid_mutability() {
+  local kt="$ANDROID_CORE/com/bitchat/android/util/AppConstants.kt"
+  local sw="$IOS_CORE/bitchat/Services/BLE/BLEService.swift"
+  [[ -f "$kt" ]] && perl -i -pe '
+      s/\bval\s+SERVICE_UUID\b/var SERVICE_UUID/;
+      s/\bval\s+CHARACTERISTIC_UUID\b/var CHARACTERISTIC_UUID/;
+    ' "$kt"
+  [[ -f "$sw" ]] && perl -0777 -i -pe '
+      # collapse "#if DEBUG … let serviceUUID … #else … let serviceUUID = <mainnet> … #endif"
+      # into a single mutable var using the mainnet value.
+      s/#if DEBUG\s*\n\s*static let serviceUUID = CBUUID\(string: "[^"]*"\)[^\n]*\n\s*#else\s*\n\s*static let serviceUUID = (CBUUID\(string: "[^"]*"\))[^\n]*\n\s*#endif/static var serviceUUID = $1/s;
+      s/\bstatic let serviceUUID\b/static var serviceUUID/;
+      s/\bstatic let characteristicUUID\b/static var characteristicUUID/;
+    ' "$sw"
+  log "Made mesh UUID constants mutable (wrapper injects the values)."
 }
 
 sync_android
 sync_ios
-patch_mesh_uuids
+patch_mesh_uuid_mutability
 log "Core sync complete."

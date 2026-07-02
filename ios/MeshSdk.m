@@ -12,6 +12,7 @@
 @interface RCT_EXTERN_MODULE(MeshSdk, RCTEventEmitter)
 
 // Lifecycle
+RCT_EXTERN_METHOD(setMeshId:(NSString *)service characteristic:(NSString *)characteristic resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(startServices:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(stopServices:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(emergencyDisconnectAll:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)

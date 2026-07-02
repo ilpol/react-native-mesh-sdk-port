@@ -25,6 +25,18 @@ import type {
 class MeshSdkClass {
   private emitter = new NativeEventEmitter(NativeModules.MeshSdk);
 
+  // ---- Mesh identity -------------------------------------------------------
+
+  /**
+   * Override the BLE mesh identity (service + characteristic UUIDs), forming a
+   * private network. **Call before `startServices()`.** Every device that should
+   * see each other must use the same pair. If never called, the SDK's built-in
+   * default (distinct from the official bitchat app) is used.
+   */
+  setMeshId(serviceUUID: string, characteristicUUID: string): Promise<void> {
+    return Native.setMeshId(serviceUUID, characteristicUUID);
+  }
+
   // ---- Lifecycle -----------------------------------------------------------
 
   /** Start BLE (and, where available, Wi-Fi Aware) mesh transports. */

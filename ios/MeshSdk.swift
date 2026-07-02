@@ -26,6 +26,11 @@ final class MeshSdk: RCTEventEmitter {
 
     // MARK: - Core BitChat wiring (mirrors AppRuntime)
 
+    // Single source of truth for the mesh identity (see Android MeshSdkModule).
+    // Distinct from official bitchat so this SDK forms its OWN private mesh.
+    private static let defaultServiceUUID = "7A9C1E3D-2B4F-4A6C-8D5E-1F2A3B4C5D6E"
+    private static let defaultCharacteristicUUID = "8B0D2F4E-3C5A-4B7D-9E6F-2A3B4C5D6E7F"
+
     private let keychain: KeychainManagerProtocol = KeychainManager()
     private lazy var idBridge = NostrIdentityBridge()
     private lazy var identityManager: SecureIdentityStateManagerProtocol =
@@ -43,6 +48,11 @@ final class MeshSdk: RCTEventEmitter {
 
     override init() {
         super.init()
+        // Inject the private-mesh UUIDs into the Core (BLEService's `static var`,
+        // made mutable via sync-core.sh) before the transport starts. This keeps
+        // the mesh identity defined at the SDK layer, not in vendored source.
+        BLEService.serviceUUID = CBUUID(string: Self.defaultServiceUUID)
+        BLEService.characteristicUUID = CBUUID(string: Self.defaultCharacteristicUUID)
         // Attach as the delegate sinks. Both are weak on the transport side.
         transport.delegate = self
         transport.eventDelegate = self
@@ -76,6 +86,17 @@ final class MeshSdk: RCTEventEmitter {
     private func peerID(_ string: String) -> PeerID { PeerID(str: string) }
 
     // MARK: - Lifecycle
+
+    /// Overrides the mesh identity (BLE service + characteristic UUIDs). Must be
+    /// called BEFORE startServices(). All devices that should see each other must
+    /// use the same pair.
+    @objc(setMeshId:characteristic:resolver:rejecter:)
+    func setMeshId(_ service: String, characteristic: String,
+                   resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+        BLEService.serviceUUID = CBUUID(string: service)
+        BLEService.characteristicUUID = CBUUID(string: characteristic)
+        resolve(nil)
+    }
 
     @objc(startServices:rejecter:)
     func startServices(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {

@@ -12,6 +12,9 @@ import { NativeModules, Platform } from 'react-native';
  * All methods that return data are async (Promise) to stay TurboModule-ready.
  */
 export interface Spec {
+  // Mesh identity — override the BLE service/characteristic UUIDs (call before startServices)
+  setMeshId(serviceUUID: string, characteristicUUID: string): Promise<void>;
+
   // Lifecycle
   startServices(): Promise<void>;
   stopServices(): Promise<void>;

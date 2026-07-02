@@ -26,11 +26,8 @@ object AppConstants {
         const val RSSI_UPDATE_INTERVAL_MS: Long = 5_000L
 
         object Gatt {
-            // NOTE: distinct from official bitchat's UUIDs so this SDK forms its
-            // OWN private mesh (won't collide with the official app). Kept in sync
-            // with iOS BLEService.swift; re-applied by scripts/sync-core.sh.
-            val SERVICE_UUID: UUID = UUID.fromString("7A9C1E3D-2B4F-4A6C-8D5E-1F2A3B4C5D6E")
-            val CHARACTERISTIC_UUID: UUID = UUID.fromString("8B0D2F4E-3C5A-4B7D-9E6F-2A3B4C5D6E7F")
+            var SERVICE_UUID: UUID = UUID.fromString("F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C")
+            var CHARACTERISTIC_UUID: UUID = UUID.fromString("A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
             val DESCRIPTOR_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
         }
     }

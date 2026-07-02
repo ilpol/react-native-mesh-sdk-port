@@ -35,9 +35,17 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
 
     companion object {
         const val NAME = "MeshSdk"
+        // Single source of truth for the mesh identity. Distinct from official
+        // bitchat's UUIDs so this SDK forms its OWN private mesh. Injected into
+        // the Core (AppConstants) at init; overridable at runtime via setMeshId().
+        const val DEFAULT_SERVICE_UUID = "7A9C1E3D-2B4F-4A6C-8D5E-1F2A3B4C5D6E"
+        const val DEFAULT_CHARACTERISTIC_UUID = "8B0D2F4E-3C5A-4B7D-9E6F-2A3B4C5D6E7F"
     }
 
     override fun getName(): String = NAME
+
+    @Volatile private var serviceUUID = DEFAULT_SERVICE_UUID
+    @Volatile private var characteristicUUID = DEFAULT_CHARACTERISTIC_UUID
 
     // ---- Core BitChat instance ----------------------------------------------
 
@@ -61,6 +69,17 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
     private fun initCore() {
         if (coreInitialized) return
         coreInitialized = true
+        // Inject the mesh UUIDs into the Core BEFORE the BLE stack starts. The
+        // Core's AppConstants fields are `var` (via sync-core.sh) precisely so
+        // this can be set from the SDK layer rather than baked into the vendored
+        // source. Must run before BluetoothMeshService is constructed (it is —
+        // this is called from the `bluetooth` lazy initializer).
+        runCatching {
+            com.bitchat.android.util.AppConstants.Mesh.Gatt.SERVICE_UUID =
+                java.util.UUID.fromString(serviceUUID)
+            com.bitchat.android.util.AppConstants.Mesh.Gatt.CHARACTERISTIC_UUID =
+                java.util.UUID.fromString(characteristicUUID)
+        }
         // Application is a Context, so it satisfies both Context- and
         // Application-typed initializer parameters in the Core.
         val app = reactContext.applicationContext as? android.app.Application ?: return
@@ -167,6 +186,18 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
     // =====================================================================
     // Lifecycle
     // =====================================================================
+
+    /**
+     * Overrides the mesh identity (BLE service + characteristic UUIDs). Must be
+     * called BEFORE startServices() — once the mesh is created the UUIDs are
+     * locked in. All devices that should see each other must use the same pair.
+     */
+    @ReactMethod fun setMeshId(service: String, characteristic: String, promise: Promise) =
+        guard(promise) {
+            serviceUUID = service
+            characteristicUUID = characteristic
+            null
+        }
 
     @ReactMethod fun startServices(promise: Promise) = guard(promise) {
         mesh.startServices(); null
