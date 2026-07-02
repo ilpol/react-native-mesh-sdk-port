@@ -49,12 +49,15 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
 
     // ---- Core BitChat instance ----------------------------------------------
 
-    private val bluetooth: BluetoothMeshService by lazy {
-        initCore()
-        BluetoothMeshService(reactContext)
-    }
     private val mesh: MeshService by lazy {
-        UnifiedMeshService(reactContext, bluetooth).also { it.delegate = this }
+        initCore()
+        // Obtain the mesh via the process-wide MeshServiceHolder so the same
+        // instance is shared with MeshForegroundService (which keeps the mesh
+        // alive in the background). Creating it directly would give the FGS a
+        // different instance.
+        com.bitchat.android.service.MeshServiceHolder
+            .getUnifiedOrCreate(reactContext.applicationContext)
+            .also { it.delegate = this }
     }
 
     /**
@@ -73,7 +76,7 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
         // Core's AppConstants fields are `var` (via sync-core.sh) precisely so
         // this can be set from the SDK layer rather than baked into the vendored
         // source. Must run before BluetoothMeshService is constructed (it is —
-        // this is called from the `bluetooth` lazy initializer).
+        // this is called from the `mesh` lazy initializer, before getUnifiedOrCreate).
         runCatching {
             com.bitchat.android.util.AppConstants.Mesh.Gatt.SERVICE_UUID =
                 java.util.UUID.fromString(serviceUUID)
@@ -200,10 +203,16 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
         }
 
     @ReactMethod fun startServices(promise: Promise) = guard(promise) {
-        mesh.startServices(); null
+        mesh.startServices()
+        // Keep the mesh alive when the app is backgrounded. The FGS reuses the
+        // same instance via MeshServiceHolder and no-ops if background is
+        // disabled or the notification/BT permissions are missing.
+        com.bitchat.android.service.MeshForegroundService.start(reactContext.applicationContext)
+        null
     }
 
     @ReactMethod fun stopServices(promise: Promise) = guard(promise) {
+        com.bitchat.android.service.MeshForegroundService.stop(reactContext.applicationContext)
         mesh.stopServices(); null
     }
 

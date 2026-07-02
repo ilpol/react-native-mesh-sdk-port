@@ -18,6 +18,24 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <!-- Foreground service — keeps the BLE mesh alive in the background
+         (MeshForegroundService). POST_NOTIFICATIONS is required on API 33+ for
+         the persistent notification the FGS must show. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <application>
+        <!-- Vendored Core BitChat foreground service that keeps the mesh running
+             in the background. Started/stopped by MeshSdkModule. -->
+        <service
+            android:name="com.bitchat.android.service.MeshForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice|dataSync|location" />
+    </application>
 
 </manifest>
