@@ -15,12 +15,15 @@ final class BLEService: NSObject {
     
     // MARK: - Constants
     
+    // NOTE: distinct from official bitchat's UUIDs so this SDK forms its OWN
+    // private mesh (won't collide with the official app). Kept in sync with
+    // Android AppConstants.kt; re-applied by scripts/sync-core.sh.
     #if DEBUG
-    static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5A") // testnet
+    static let serviceUUID = CBUUID(string: "7A9C1E3D-2B4F-4A6C-8D5E-1F2A3B4C5D6C") // testnet
     #else
-    static let serviceUUID = CBUUID(string: "F47B5E2D-4A9E-4C5A-9B3F-8E1D2C3A4B5C") // mainnet
+    static let serviceUUID = CBUUID(string: "7A9C1E3D-2B4F-4A6C-8D5E-1F2A3B4C5D6E") // mainnet
     #endif
-    static let characteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")
+    static let characteristicUUID = CBUUID(string: "8B0D2F4E-3C5A-4B7D-9E6F-2A3B4C5D6E7F")
     private static let centralRestorationID = "chat.bitchat.ble.central"
     private static let peripheralRestorationID = "chat.bitchat.ble.peripheral"
     
