@@ -127,12 +127,15 @@ MeshSdk.addListener('onBluetoothStateChange', ({ state }) => {
 // Suppress notifications for the chat that's currently on screen
 // (null = public feed / none). Toggle notifications at any time.
 await MeshSdk.setActiveChatPeer(peerID);
-await MeshSdk.setNotificationsEnabled(false);
+await MeshSdk.setNotificationsEnabled(false);         // DMs (default on)
+await MeshSdk.setPublicNotificationsEnabled(true);    // public broadcasts (default off)
 ```
 
-On Android, DM notifications fire when the app is backgrounded (or foregrounded
-but not viewing that chat). If the app is fully killed, the background service
-keeps the mesh alive and shows the notification itself. **History is not
+DM notifications fire when the app is backgrounded, or foregrounded but not
+viewing that chat; public-broadcast notifications are **off by default** and, when
+enabled, follow the same gating (never while the public feed is on screen). On
+Android, if the app is fully killed the background service keeps the mesh alive
+and shows the DM notification itself. **History is not
 persisted by the SDK** (Core BitChat is ephemeral by design) — persist messages
 in your app if you need them across restarts; see the example's `useMesh.ts`.
 
@@ -155,18 +158,46 @@ All of our code lives in the wrapper layer. As long as the public
 `MeshService` / `Transport` surface is unchanged, an upstream BitChat update is a
 pure file copy.
 
-## Keeping Core BitChat up to date
+## Keeping Core BitChat up to date (`sync-core.sh`)
+
+The Core BitChat sources are **vendored** into this package rather than pulled as
+a dependency. `scripts/sync-core.sh` (exposed as `npm run sync-core`) re‑vendors
+them from the upstream repos, so pulling a new BitChat release is a re‑run + a
+rebuild — **you never hand‑edit Core**.
 
 ```bash
-# bitchat-android / bitchat-ios expected as siblings by default
+# bitchat-android / bitchat-ios expected as siblings of this package by default;
+# override with ANDROID_SRC / IOS_SRC.
 ANDROID_SRC=../bitchat-android IOS_SRC=../bitchat-ios npm run sync-core
 ```
 
-This re‑vendors the full `com.bitchat.android` tree (+ Arti JNI, resources,
-`jniLibs`) into `android/src/main/java`, precompiles the southernstorm Noise
-library to `android/libs`, and copies the bitchat‑ios sources into `ios/bitchat`
-+ `ios/localPackages`. Then rebuild (and re‑run `setup-ios.rb` for iOS). If the wrapper
-stops compiling, the public core surface changed — fix **only** the wrapper.
+**What it does**
+
+- **Android** — copies the whole `com.bitchat.android` tree (+ the Arti/Tor JNI
+  bindings under `info.guardianproject` / `org.torproject`, `res/`, `assets/`,
+  `jniLibs/`) into `android/src/main/java`. It then:
+  - precompiles the Java‑only southernstorm Noise library to
+    `android/libs/southernstorm-noise.jar` (Kotlin 2.0.x — the max RNGP 0.74
+    allows — can't resolve it from mixed sources) and drops the sources;
+  - prunes the `values-<lang>` string translations (the RN host provides the UI).
+- **iOS** — copies the whole `bitchat/` source tree into `ios/bitchat` and the
+  local Swift packages (BitFoundation, BitLogger, Tor/Arti incl. its prebuilt
+  `arti.xcframework`) into `ios/localPackages`. It prunes app‑shell bits that
+  can't compile into the RN app target (`BitchatApp.swift`, `Assets.xcassets`,
+  `Info.plist`, `*.entitlements`, storyboards, …).
+
+**Patch applied on top (the only deviation from verbatim)**
+
+Everything else is copied byte‑for‑byte; this is re‑applied by the script on
+every sync so upstream stays pristine and updates keep flowing in:
+
+- `patch_mesh_uuid_mutability` — makes the BLE service/characteristic UUID
+  constants mutable (`val`→`var` on Android; collapse `#if`/`let`→`static var`
+  on iOS) so the wrapper can inject the mesh identity via `setMeshId()`.
+
+After a sync, **rebuild**; for iOS also re‑run `ruby scripts/setup-ios.rb`. If the
+wrapper stops compiling, the public Core surface (`MeshService` / `Transport`)
+changed upstream — fix **only** the wrapper, never Core.
 
 ## Example app
 

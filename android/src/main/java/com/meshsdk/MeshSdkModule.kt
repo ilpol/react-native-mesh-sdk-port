@@ -195,6 +195,11 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
     // the notification itself.
 
     @Volatile private var notificationsEnabled = true
+    // Public-broadcast notifications are opt-in (a busy mesh could be noisy).
+    @Volatile private var publicNotificationsEnabled = false
+    // Mirror app/chat state so we can gate public notifications ourselves.
+    @Volatile private var appInBackground = false
+    @Volatile private var currentChatPeer: String? = null
 
     private val coreNotifications: CoreNotificationManager by lazy {
         val app = reactContext.applicationContext
@@ -212,20 +217,26 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
         null
     }
 
+    /** Enable/disable notifications for public (broadcast) messages. Default off. */
+    @ReactMethod fun setPublicNotificationsEnabled(enabled: Boolean, promise: Promise) = guard(promise) {
+        publicNotificationsEnabled = enabled; null
+    }
+
     /**
      * Tell the SDK which private chat is on screen (null = none/public) so it
      * won't notify for the conversation the user is already viewing.
      */
     @ReactMethod fun setActiveChatPeer(peerID: String?, promise: Promise) = guard(promise) {
+        currentChatPeer = peerID
         coreNotifications.setCurrentPrivateChatPeer(peerID)
         peerID?.let { coreNotifications.clearNotificationsForSender(it) }
         null
     }
 
-    // LifecycleEventListener — keep Core's background flag in sync.
-    override fun onHostResume() { coreNotifications.setAppBackgroundState(false) }
-    override fun onHostPause() { coreNotifications.setAppBackgroundState(true) }
-    override fun onHostDestroy() { coreNotifications.setAppBackgroundState(true) }
+    // LifecycleEventListener — keep Core's background flag + our mirror in sync.
+    override fun onHostResume() { appInBackground = false; coreNotifications.setAppBackgroundState(false) }
+    override fun onHostPause() { appInBackground = true; coreNotifications.setAppBackgroundState(true) }
+    override fun onHostDestroy() { appInBackground = true; coreNotifications.setAppBackgroundState(true) }
 
     // =====================================================================
     // MeshDelegate — Core BitChat callbacks → JS events
@@ -233,12 +244,19 @@ class MeshSdkModule(private val reactContext: ReactApplicationContext) :
 
     override fun didReceiveMessage(message: BitchatMessage) {
         emit("onMessage", MeshSdkMapper.messageToMap(message))
-        // Show a DM notification (Core self-gates on background / current chat).
-        if (notificationsEnabled && message.isPrivate) {
-            message.senderPeerID?.let { peerID ->
-                val preview = NotificationTextUtils.buildPrivateMessagePreview(message)
-                coreNotifications.showPrivateMessageNotification(peerID, message.sender, preview)
+        if (message.isPrivate) {
+            // DM notification (Core self-gates on background / current chat).
+            if (notificationsEnabled) {
+                message.senderPeerID?.let { peerID ->
+                    val preview = NotificationTextUtils.buildPrivateMessagePreview(message)
+                    coreNotifications.showPrivateMessageNotification(peerID, message.sender, preview)
+                }
             }
+        } else if (publicNotificationsEnabled && (appInBackground || currentChatPeer != null)) {
+            // Public broadcast — opt-in, and never while the public feed is on
+            // screen in the foreground. Reuses Core's notification machinery.
+            val key = message.senderPeerID ?: message.sender
+            coreNotifications.showPrivateMessageNotification(key, message.sender, message.content)
         }
     }
 

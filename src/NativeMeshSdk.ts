@@ -26,6 +26,7 @@ export interface Spec {
 
   // Local notifications
   setNotificationsEnabled(enabled: boolean): Promise<void>;
+  setPublicNotificationsEnabled(enabled: boolean): Promise<void>;
   setActiveChatPeer(peerID: string | null): Promise<void>;
 
   // Identity

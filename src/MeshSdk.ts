@@ -88,6 +88,15 @@ class MeshSdkClass {
   }
 
   /**
+   * Enable/disable notifications for public (broadcast) messages. **Off by
+   * default** — a busy mesh could otherwise be noisy. Same gating as DMs (fires
+   * when backgrounded, or foregrounded but not viewing the public feed).
+   */
+  setPublicNotificationsEnabled(enabled: boolean): Promise<void> {
+    return Native.setPublicNotificationsEnabled(enabled);
+  }
+
+  /**
    * Tell the SDK which private chat is currently on screen (`null` for none or
    * the public feed) so it won't notify for a conversation the user is viewing.
    */

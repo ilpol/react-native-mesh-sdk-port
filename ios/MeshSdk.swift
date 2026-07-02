@@ -51,8 +51,35 @@ final class MeshSdk: RCTEventEmitter {
     /// Local DM notifications — in-code toggle + the chat currently on screen
     /// (so we don't notify for a conversation the user is already viewing).
     private var notificationsEnabled = true
+    private var publicNotificationsEnabled = false   // public broadcasts are opt-in
     private var activeChatPeer: String?
+
+    /// Messages received while the app is backgrounded can be lost — the JS
+    /// runtime is suspended and Core iOS keeps no history. Worse, iOS often
+    /// TERMINATES a backgrounded BLE app, which would wipe an in-memory buffer.
+    /// So we persist unreceived messages to disk (UserDefaults) as they arrive
+    /// (BLE wakes the app, so our native code runs even while JS is suspended)
+    /// and replay them once JS is listening again — on foreground OR on the next
+    /// cold launch. The app dedups by message id, so replay is safe.
+    private var isActive = true
+    private let pendingLock = NSLock()
+    private let pendingKey = "meshsdk.pendingMessages"
     private var cancellables = Set<AnyCancellable>()
+
+    private func loadPending() -> [[String: Any]] {
+        (UserDefaults.standard.array(forKey: pendingKey) as? [[String: Any]]) ?? []
+    }
+
+    /// Replay buffered messages once JS can actually receive them. No-ops until a
+    /// listener is attached, so cold-launch messages wait on disk for startObserving.
+    private func flushPending() {
+        guard hasListeners else { return }
+        pendingLock.lock()
+        let msgs = loadPending()
+        UserDefaults.standard.removeObject(forKey: pendingKey)
+        pendingLock.unlock()
+        for body in msgs { emit("onMessage", body) }
+    }
 
     // MARK: - RCTEventEmitter plumbing
 
@@ -66,6 +93,41 @@ final class MeshSdk: RCTEventEmitter {
         // Attach as the delegate sinks. Both are weak on the transport side.
         transport.delegate = self
         transport.eventDelegate = self
+        // Track foreground/background to buffer & replay messages (see above).
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification, object: nil)
+    }
+
+    @objc private func appDidBecomeActive() {
+        isActive = true
+        flushPending()
+    }
+
+    @objc private func appWillResignActive() { isActive = false }
+
+    /// Emit an incoming message. Deliver live FIRST (never blocked by persistence),
+    /// then — while the app isn't active or JS isn't listening yet — also persist
+    /// it to disk so it survives suspension/termination and is replayed later.
+    private func emitMessage(_ body: [String: Any]) {
+        emit("onMessage", body)
+        guard !isActive || !hasListeners else { return }
+        // Keep ONLY property-list-safe values: UserDefaults crashes on anything
+        // else (e.g. a nil `recipientNickname` bridged as Optional<String>.none).
+        var safe: [String: Any] = [:]
+        for (k, v) in body {
+            if let s = v as? String { safe[k] = s }
+            else if let n = v as? NSNumber { safe[k] = n }   // covers Int/Double/Bool
+        }
+        pendingLock.lock()
+        var arr = loadPending()
+        arr.append(safe)
+        if arr.count > 200 { arr.removeFirst(arr.count - 200) }
+        UserDefaults.standard.set(arr, forKey: pendingKey)
+        pendingLock.unlock()
     }
 
     override static func requiresMainQueueSetup() -> Bool { true }
@@ -85,7 +147,7 @@ final class MeshSdk: RCTEventEmitter {
         ]
     }
 
-    override func startObserving() { hasListeners = true }
+    override func startObserving() { hasListeners = true; flushPending() }
     override func stopObserving() { hasListeners = false }
 
     private func emit(_ name: String, _ body: Any) {
@@ -157,6 +219,14 @@ final class MeshSdk: RCTEventEmitter {
         resolve(nil)
     }
 
+    /// Enable/disable notifications for public (broadcast) messages. Default off.
+    @objc(setPublicNotificationsEnabled:resolver:rejecter:)
+    func setPublicNotificationsEnabled(_ enabled: Bool, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+        publicNotificationsEnabled = enabled
+        if enabled { NotificationService.shared.requestAuthorization() }
+        resolve(nil)
+    }
+
     /// Tell the SDK which private chat is on screen (null = none/public).
     @objc(setActiveChatPeer:resolver:rejecter:)
     func setActiveChatPeer(_ peerID: NSString?, resolver resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
@@ -168,9 +238,17 @@ final class MeshSdk: RCTEventEmitter {
     /// chat in the foreground. iOS presents it automatically when backgrounded.
     fileprivate func notifyPrivateMessage(from sender: String, content: String, peerID: PeerID) {
         guard notificationsEnabled else { return }
-        let inForeground = UIApplication.shared.applicationState == .active
-        if inForeground && activeChatPeer == peerID.id { return }
+        if isActive && activeChatPeer == peerID.id { return }
         NotificationService.shared.sendPrivateMessageNotification(from: sender, message: content, peerID: peerID)
+    }
+
+    /// Notify for a public broadcast — opt-in, and never while the public feed is
+    /// on screen in the foreground.
+    fileprivate func notifyPublicMessage(from sender: String, content: String) {
+        guard publicNotificationsEnabled else { return }
+        if isActive && activeChatPeer == nil { return }
+        NotificationService.shared.sendLocalNotification(
+            title: sender, body: content, identifier: "public-\(UUID().uuidString)")
     }
 
     // MARK: - Identity
@@ -477,7 +555,7 @@ private extension MeshSdk {
 
 extension MeshSdk: BitchatDelegate {
     func didReceiveMessage(_ message: BitchatMessage) {
-        emit("onMessage", messageToDict(message))
+        emitMessage(messageToDict(message))
     }
 
     func didConnectToPeer(_ peerID: PeerID) {
@@ -504,7 +582,7 @@ extension MeshSdk: BitchatDelegate {
         case .privateMessage:
             guard let packet = PrivateMessagePacket.decode(from: payload) else { return }
             let sender = transport.peerNickname(peerID: peerID) ?? peerID.id
-            emit("onMessage", [
+            emitMessage([
                 "id": packet.messageID,
                 "sender": sender,
                 "content": packet.content,
@@ -533,7 +611,7 @@ extension MeshSdk: BitchatDelegate {
     }
 
     func didReceivePublicMessage(from peerID: PeerID, nickname: String, content: String, timestamp: Date, messageID: String?) {
-        emit("onMessage", [
+        emitMessage([
             "id": messageID ?? UUID().uuidString,
             "sender": nickname,
             "content": content,
@@ -544,6 +622,7 @@ extension MeshSdk: BitchatDelegate {
             "isEncrypted": false,
             "senderPeerID": peerID.id,
         ])
+        notifyPublicMessage(from: nickname, content: content)
     }
 
     func didUpdateBluetoothState(_ state: CBManagerState) {

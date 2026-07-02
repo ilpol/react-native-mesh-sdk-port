@@ -11,9 +11,11 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   reused across the process via `MeshServiceHolder` and stopped by
   `stopServices()`. The manifest ships the `FOREGROUND_SERVICE*` permissions and
   the service declaration.
-- **Local notifications** for incoming private messages, driving Core BitChat's
-  own notification manager. New APIs:
-  - `setNotificationsEnabled(enabled)` — on/off toggle (default on).
+- **Local notifications** for incoming messages, driving Core BitChat's own
+  notification manager. New APIs:
+  - `setNotificationsEnabled(enabled)` — DM notifications on/off (default on).
+  - `setPublicNotificationsEnabled(enabled)` — public-broadcast notifications
+    on/off (default **off** — a busy mesh can be noisy).
   - `setActiveChatPeer(peerID | null)` — suppress notifications for the chat
     currently on screen.
 - **Bluetooth adapter control.** Android now emits `onBluetoothStateChange`
@@ -27,6 +29,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   internal Bluetooth-state receiver is now registered with
   `ContextCompat.RECEIVER_NOT_EXPORTED`, as required by API 34+
   (`registerReceiver` without an export flag threw `SecurityException`).
+- **iOS: messages received while backgrounded were lost.** The JS runtime is
+  suspended in the background, Core iOS keeps no history, and iOS often terminates
+  a backgrounded BLE app — so the `onMessage` event was dropped. Incoming messages
+  are now persisted natively to disk as they arrive (BLE wakes the app, so native
+  code runs even while JS is suspended) and replayed once JS is listening again —
+  on return to foreground **or on the next cold launch** (deduped by id). Messages
+  sent to a backgrounded/terminated iPhone now appear when the app is reopened,
+  matching Android. The native buffer emits live first and only persists
+  property-list-safe fields, so it can never crash the app (an earlier build
+  could crash persisting a private message whose optional `recipientNickname`
+  was nil, which destabilized sessions).
 
 ### Notes
 - Message history is still **not** persisted by the SDK — Core BitChat is
