@@ -32,6 +32,13 @@ Android and iOS.
 
 Bluetooth mesh needs **two physical devices** — simulators/emulators have no BLE radio.
 
+> ⚠️ **Don't run the official BitChat app at the same time as an app built on this
+> SDK on the same device.** Both drive a BLE mesh and aggressively scan/advertise/
+> connect on the one Bluetooth radio; running them together causes radio contention
+> that destabilizes connections and can break the Noise handshake (private messages
+> silently fail while public still works). Close/quit official BitChat while using
+> your app.
+
 ## Install
 
 ```bash
