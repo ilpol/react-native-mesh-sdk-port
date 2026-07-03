@@ -3,7 +3,7 @@
 All notable changes to `react-native-mesh-sdk` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## 1.3.0
+## 1.4.0
 
 ### Added
 - **Background operation (Android).** `startServices()` now starts a foreground
@@ -44,6 +44,12 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 ### Notes
 - Message history is still **not** persisted by the SDK — Core BitChat is
   ephemeral by design. Persist in your app if needed (see the example app).
+
+## 1.3.0
+- Partial early release, **superseded by 1.4.0** — it shipped the background
+  service, DM notifications, `setActiveChatPeer`, and Bluetooth state APIs, but
+  not public-broadcast notifications or the crash‑safe disk‑backed iOS message
+  buffer. Use 1.4.0.
 
 ## 1.2.0
 - Mesh identity is configurable from the app via `setMeshId(service, characteristic)`,
