@@ -36,6 +36,21 @@
             android:name="com.bitchat.android.service.MeshForegroundService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice|dataSync|location" />
+
+        <!-- Notification-tap trampoline. Core hardcodes its tap PendingIntents to
+             com.bitchat.android.MainActivity (compiled but not declared in the host
+             app). The alias maps that component name to our trampoline, which opens
+             the host app's own launcher — so tapping a notification opens the app. -->
+        <activity
+            android:name="com.meshsdk.NotificationLauncherActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity-alias
+            android:name="com.bitchat.android.MainActivity"
+            android:exported="false"
+            android:targetActivity="com.meshsdk.NotificationLauncherActivity" />
     </application>
 
 </manifest>
