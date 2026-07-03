@@ -1,6 +1,6 @@
 {
   "name": "react-native-mesh-sdk",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Bluetooth mesh messaging for React Native, ported from the native BitChat cores (Android + iOS).",
   "repository": {
     "type": "git",

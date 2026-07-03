@@ -3,6 +3,17 @@
 All notable changes to `react-native-mesh-sdk` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 1.4.1
+
+### Fixed
+- **Android: tapping a notification didn't open the app.** Core hardcodes its
+  notification tap intents to `com.bitchat.android.MainActivity`, which is
+  compiled but never declared in the host app's manifest (the host has its own
+  launcher), so taps were no-ops. The library now ships a tiny trampoline
+  `NotificationLauncherActivity` plus an `<activity-alias>` mapping that component
+  name to it; the trampoline brings the host app's own launcher to the front. No
+  Core changes — Core stays drop-in updatable.
+
 ## 1.4.0
 
 ### Added
